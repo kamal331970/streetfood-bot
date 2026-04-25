@@ -10,7 +10,7 @@ async function callClaude(userId, message) {
   if (!userHistory[userId]) userHistory[userId] = [];
   userHistory[userId].push({ role: 'user', content: message });
   const response = await anthropic.messages.create({
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 1000,
     system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h pour gagner argent. Si URGENCE CASH -> actions immédiates sans budget.',
     messages: userHistory[userId]

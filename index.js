@@ -14,10 +14,16 @@ const userHistory = {};
 async function creerRDV(titre, date, heure, notes) {
   await notion.pages.create({
     parent: { page_id: NOTION_PAGE_ID },
-    properties: {
-      title: { title: [{ text: { content: titre } }] }
-    },
+    properties: { title: { title: [{ text: { content: 'RDV: ' + titre } }] } },
     children: [{ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: 'Date: ' + date + ' Heure: ' + heure + ' Notes: ' + notes } }] } }]
+  });
+}
+
+async function creerTache(titre, priorite) {
+  await notion.pages.create({
+    parent: { page_id: NOTION_PAGE_ID },
+    properties: { title: { title: [{ text: { content: 'TACHE: ' + titre } }] } },
+    children: [{ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: 'Priorite: ' + priorite + ' | Statut: A faire' } }] } }]
   });
 }
 
@@ -36,8 +42,8 @@ async function envoyerRappels() {
         for (const b of contenu.results) {
           if (b.type === 'paragraph') {
             const texte = b.paragraph.rich_text[0]?.plain_text || '';
-            if (texte.includes(aujourd_hui) || texte.includes(demain)) {
-              message += '📅 ' + titre + '\n' + texte + '\n\n';
+            if (texte.includes(aujourd_hui) || texte.includes(demain) || titre.includes('TACHE')) {
+              message += '- ' + titre + '\n' + texte + '\n\n';
               count++;
             }
           }
@@ -47,7 +53,7 @@ async function envoyerRappels() {
     if (count > 0) {
       await bot.telegram.sendMessage(CHAT_ID, message);
     } else {
-      await bot.telegram.sendMessage(CHAT_ID, 'Bonjour Kamal! Aucun RDV aujourd\'hui ni demain. Bonne journee!');
+      await bot.telegram.sendMessage(CHAT_ID, 'Bonjour Kamal! Aucun RDV ni tache aujourd\'hui.');
     }
   } catch (err) {
     console.error('Erreur rappels:', err.message);
@@ -64,7 +70,6 @@ function demarrerRappels() {
     envoyerRappels();
     setInterval(envoyerRappels, 24 * 60 * 60 * 1000);
   }, delai);
-  console.log('Rappels programmes a 8h chaque matin');
 }
 
 async function callClaude(userId, message) {
@@ -74,7 +79,7 @@ async function callClaude(userId, message) {
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1000,
-    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h. Si URGENCE CASH -> actions immediates. Si RDV demande, reponds UNIQUEMENT avec: RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}',
+    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h. Si URGENCE CASH -> actions immediates. Si RDV demande -> reponds: RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}. Si tache demandee -> reponds: TACHE:{"titre":"...","priorite":"haute/normale/basse"}',
     messages: userHistory[userId]
   });
   const reply = response.content[0].text;
@@ -94,10 +99,13 @@ bot.on('text', async (ctx) => {
     await ctx.sendChatAction('typing');
     const reply = await callClaude(ctx.from.id, ctx.message.text);
     if (reply.includes('RDV:')) {
-      const jsonBrut = extraireJSON(reply);
-      const rdv = JSON.parse(jsonBrut);
+      const rdv = JSON.parse(extraireJSON(reply));
       await creerRDV(rdv.titre, rdv.date, rdv.heure, rdv.notes);
-      await ctx.reply('RDV cree dans Notion: ' + rdv.titre + ' le ' + rdv.date + ' a ' + rdv.heure);
+      await ctx.reply('RDV cree: ' + rdv.titre + ' le ' + rdv.date + ' a ' + rdv.heure);
+    } else if (reply.includes('TACHE:')) {
+      const tache = JSON.parse(extraireJSON(reply));
+      await creerTache(tache.titre, tache.priorite);
+      await ctx.reply('Tache creee dans Notion: ' + tache.titre + ' (priorite: ' + tache.priorite + ')');
     } else {
       await ctx.reply(reply);
     }

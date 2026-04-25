@@ -27,7 +27,7 @@ async function callClaude(userId, message) {
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1000,
-    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h. Si URGENCE CASH -> actions immédiates. Si RDV demandé, réponds avec: RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}',
+    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h. Si URGENCE CASH -> actions immediates. Si RDV demande, reponds UNIQUEMENT avec ce format sans emojis: RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}',
     messages: userHistory[userId]
   });
   const reply = response.content[0].text;
@@ -35,13 +35,20 @@ async function callClaude(userId, message) {
   return reply;
 }
 
+function extraireJSON(texte) {
+  const debut = texte.indexOf('{');
+  const fin = texte.lastIndexOf('}');
+  if (debut === -1 || fin === -1) return null;
+  return texte.substring(debut, fin + 1);
+}
+
 bot.on('text', async (ctx) => {
   try {
     await ctx.sendChatAction('typing');
     const reply = await callClaude(ctx.from.id, ctx.message.text);
     if (reply.includes('RDV:')) {
-      const jsonStr = reply.split('RDV:')[1].trim();
-      const rdv = JSON.parse(jsonStr);
+      const jsonBrut = extraireJSON(reply);
+      const rdv = JSON.parse(jsonBrut);
       await creerRDV(rdv.titre, rdv.date, rdv.heure, rdv.notes);
       await ctx.reply('RDV cree dans Notion: ' + rdv.titre + ' le ' + rdv.date + ' a ' + rdv.heure);
     } else {

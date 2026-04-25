@@ -2,8 +2,8 @@ require('dotenv').config();
 const { Telegraf, Markup } = require('telegraf');
 const Anthropic = require('@anthropic-ai/sdk');
 
-const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN.trim());
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY.trim() });
 
 // Historique par utilisateur
 const userHistory = {};

@@ -1,18 +1,40 @@
 require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const Anthropic = require('@anthropic-ai/sdk');
+const { Client } = require('@notionhq/client');
 
 const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN.trim());
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY.trim() });
+const notion = new Client({ auth: process.env.NOTION_TOKEN.trim() });
+const NOTION_PAGE_ID = process.env.NOTION_PAGE_ID.trim();
+
 const userHistory = {};
+
+async function creerRDV(titre, date, heure, notes) {
+  await notion.pages.create({
+    parent: { page_id: NOTION_PAGE_ID },
+    properties: {
+      title: { title: [{ text: { content: titre } }] }
+    },
+    children: [
+      { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: `📅 Date: ${date}\n⏰ Heure: ${heure}\n📝 Notes: ${notes}` } }] } }
+    ]
+  });
+}
 
 async function callClaude(userId, message) {
   if (!userHistory[userId]) userHistory[userId] = [];
   userHistory[userId].push({ role: 'user', content: message });
+  if (userHistory[userId].length > 20) userHistory[userId] = userHistory[userId].slice(-20);
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1000,
-    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h pour gagner argent. Si URGENCE CASH -> actions immédiates sans budget.',
+    system: `Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus.
+Si BOOST -> plan 24h pour gagner argent.
+Si URGENCE CASH -> actions immédiates sans budget.
+Si l'utilisateur veut créer un RDV, réponds EXACTEMENT avec ce format JSON sur une seule ligne:
+RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}
+Sinon réponds normalement.`,
     messages: userHistory[userId]
   });
   const reply = response.content[0].text;
@@ -24,13 +46,14 @@ bot.on('text', async (ctx) => {
   try {
     await ctx.sendChatAction('typing');
     const reply = await callClaude(ctx.from.id, ctx.message.text);
-    await ctx.reply(reply);
+    
+    if (reply.includes('RDV:')) {
+      const jsonStr = reply.split('RDV:')[1].trim();
+      const rdv = JSON.parse(jsonStr);
+      await creerRDV(rdv.titre, rdv.date, rdv.heure, rdv.notes);
+      await ctx.reply(`✅ RDV créé dans Notion !\n📅 ${rdv.titre}\n🗓 ${rdv.date} à ${rdv.heure}`);
+    } else {
+      await ctx.reply(reply);
+    }
   } catch (err) {
-    await ctx.reply('Erreur: ' + err.message);
-  }
-});
-
-bot.launch();
-console.log('Bot started!');
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+    await ctx.reply('Erreur: ' + err.message)

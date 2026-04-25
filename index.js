@@ -16,9 +16,7 @@ async function creerRDV(titre, date, heure, notes) {
     properties: {
       title: { title: [{ text: { content: titre } }] }
     },
-    children: [
-      { object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: `📅 Date: ${date}\n⏰ Heure: ${heure}\n📝 Notes: ${notes}` } }] } }
-    ]
+    children: [{ object: 'block', type: 'paragraph', paragraph: { rich_text: [{ text: { content: 'Date: ' + date + ' Heure: ' + heure + ' Notes: ' + notes } }] } }]
   });
 }
 
@@ -29,12 +27,7 @@ async function callClaude(userId, message) {
   const response = await anthropic.messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 1000,
-    system: `Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus.
-Si BOOST -> plan 24h pour gagner argent.
-Si URGENCE CASH -> actions immédiates sans budget.
-Si l'utilisateur veut créer un RDV, réponds EXACTEMENT avec ce format JSON sur une seule ligne:
-RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}
-Sinon réponds normalement.`,
+    system: 'Tu es un assistant business pour Kamal. Food truck pizza Bordeaux + pneus. Si BOOST -> plan 24h. Si URGENCE CASH -> actions immédiates. Si RDV demandé, réponds avec: RDV:{"titre":"...","date":"JJ/MM/AAAA","heure":"HH:MM","notes":"..."}',
     messages: userHistory[userId]
   });
   const reply = response.content[0].text;
@@ -46,14 +39,20 @@ bot.on('text', async (ctx) => {
   try {
     await ctx.sendChatAction('typing');
     const reply = await callClaude(ctx.from.id, ctx.message.text);
-    
     if (reply.includes('RDV:')) {
       const jsonStr = reply.split('RDV:')[1].trim();
       const rdv = JSON.parse(jsonStr);
       await creerRDV(rdv.titre, rdv.date, rdv.heure, rdv.notes);
-      await ctx.reply(`✅ RDV créé dans Notion !\n📅 ${rdv.titre}\n🗓 ${rdv.date} à ${rdv.heure}`);
+      await ctx.reply('RDV cree dans Notion: ' + rdv.titre + ' le ' + rdv.date + ' a ' + rdv.heure);
     } else {
       await ctx.reply(reply);
     }
   } catch (err) {
-    await ctx.reply('Erreur: ' + err.message)
+    await ctx.reply('Erreur: ' + err.message);
+  }
+});
+
+bot.launch();
+console.log('Bot started!');
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
